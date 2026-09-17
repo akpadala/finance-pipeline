@@ -1,0 +1,19 @@
+.venv/
+__pycache__/
+*.pyc
+.git/
+.gitignore
+
+# Generated at runtime inside the container / mounted in via volumes --
+# no reason to bake stale copies into the image itself.
+warehouse/
+finance_dbt/target/
+finance_dbt/logs/
+finance_dbt/dbt_packages/
+ml/model/
+data/raw/*.csv
+!data/raw/sample_transactions.csv
+
+# Airflow has its own containers (airflow/Dockerfile) -- not part of this
+# image.
+airflow/

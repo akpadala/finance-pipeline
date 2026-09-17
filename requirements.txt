@@ -1,0 +1,8 @@
+# Core pipeline
+duckdb>=0.10
+dbt-duckdb>=1.7
+pandas>=2.1
+
+# Dashboard
+streamlit>=1.30
+plotly>=5.18

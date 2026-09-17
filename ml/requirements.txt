@@ -1,0 +1,4 @@
+# Only needed for the ML categorizer (ml/train_categorizer.py) -- kept
+# separate from the root requirements.txt so the core pipeline stays
+# lean and this stays an obvious, optional add-on.
+scikit-learn>=1.3

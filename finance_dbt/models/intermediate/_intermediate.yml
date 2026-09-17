@@ -1,0 +1,31 @@
+version: 2
+
+models:
+  - name: int_transactions_categorized
+    description: >
+      One row per transaction, enriched with a derived category, a
+      cleaned merchant name, and a heuristic recurring-charge flag.
+    columns:
+      - name: transaction_id
+        tests:
+          - unique
+          - not_null
+      - name: category
+        description: Rule-based category from the categorize_transaction macro.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values:
+                  - Groceries
+                  - Dining & Coffee
+                  - Subscriptions
+                  - Rent
+                  - Utilities & Bills
+                  - Transportation
+                  - Shopping
+                  - Entertainment
+                  - Travel
+                  - Healthcare
+                  - Income
+                  - Uncategorized

@@ -1,0 +1,78 @@
+# A deliberately lean Airflow setup: LocalExecutor (tasks run as local
+# processes inside the scheduler container, not distributed across
+# workers), one Postgres container for Airflow's own metadata (task
+# state, run history -- NOT your finance data, which stays in the DuckDB
+# file this stack mounts in from the repo). That's the right amount of
+# infrastructure for one person's pipeline on one laptop; a distributed
+# executor (Celery/Kubernetes) is what you reach for once one machine
+# isn't enough, which is worth being able to say out loud in an
+# interview as the reason this *isn't* built that way.
+#
+# Run from the airflow/ directory:
+#   docker compose up airflow-init   (first time only -- sets up the DB + admin user)
+#   docker compose up                (starts webserver + scheduler)
+# Then open http://localhost:8080 (both username and password: admin).
+
+x-airflow-common: &airflow-common
+  build:
+    context: ..
+    dockerfile: airflow/Dockerfile
+  environment:
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
+    AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
+    AIRFLOW__WEBSERVER__SECRET_KEY: 'finance-pipeline-local-dev-only'
+    # This is what makes DBT_PROFILES_DIR resolve inside the container --
+    # see dags/finance_pipeline_dag.py, which builds every dbt command
+    # relative to PROJECT_DIR below.
+    DBT_PROFILES_DIR: /opt/airflow/project/finance_dbt
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ..:/opt/airflow/project
+    - airflow_logs:/opt/airflow/logs
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      retries: 5
+
+  airflow-init:
+    <<: *airflow-common
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - >
+        airflow db migrate &&
+        airflow users create
+        --username admin --password admin
+        --firstname Admin --lastname User
+        --role Admin --email admin@example.com
+
+  airflow-webserver:
+    <<: *airflow-common
+    command: webserver
+    ports:
+      - "8080:8080"
+    restart: always
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    restart: always
+
+volumes:
+  postgres_data:
+  airflow_logs:

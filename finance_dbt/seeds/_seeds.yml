@@ -1,0 +1,19 @@
+version: 2
+
+seeds:
+  - name: category_budgets
+    description: >
+      Your monthly budget target per spending category. This is a dbt
+      *seed*, meaning it's plain CSV data checked into the repo and
+      loaded into the warehouse by `dbt seed` -- the right tool for small,
+      manually-maintained reference data (as opposed to raw transactions,
+      which come from an external source). Editing your budget is just
+      editing this file.
+    columns:
+      - name: category
+        tests:
+          - unique
+          - not_null
+      - name: monthly_budget
+        tests:
+          - not_null

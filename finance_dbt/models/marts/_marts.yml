@@ -1,0 +1,66 @@
+version: 2
+
+models:
+  - name: dim_category
+    description: One row per spending category, with its budget group and monthly budget target.
+    columns:
+      - name: category_id
+        tests:
+          - unique
+          - not_null
+      - name: category
+        tests:
+          - unique
+          - not_null
+
+  - name: dim_merchant
+    description: One row per distinct merchant (excludes income deposits).
+    columns:
+      - name: merchant_id
+        tests:
+          - unique
+          - not_null
+      - name: merchant_name
+        tests:
+          - unique
+          - not_null
+
+  - name: fct_transactions
+    description: One row per transaction, foreign-keyed to dim_category and dim_merchant.
+    columns:
+      - name: transaction_id
+        tests:
+          - unique
+          - not_null
+      - name: category_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('dim_category')
+              field: category_id
+      - name: amount
+        tests:
+          - not_null
+
+  - name: mart_monthly_spending
+    description: Spend and transaction count, grouped by month and category. Feeds the dashboard's category and trend charts.
+    columns:
+      - name: month
+        tests:
+          - not_null
+      - name: total_spent
+        tests:
+          - not_null
+
+  - name: mart_budget_vs_actual
+    description: Actual spend vs. your monthly budget target per category. Feeds the dashboard's budget-vs-actual view.
+    columns:
+      - name: month
+        tests:
+          - not_null
+      - name: budgeted_amount
+        tests:
+          - not_null
+      - name: variance
+        tests:
+          - not_null

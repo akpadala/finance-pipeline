@@ -1,0 +1,55 @@
+# Containerizes the pipeline + dashboard themselves. Airflow already runs
+# in Docker as of Phase 2 (see airflow/docker-compose.yaml) -- this is the
+# separate, simpler stack for "just run the whole thing with one command"
+# (no Airflow UI, no scheduler, nothing to click through). The two stacks
+# are intentionally independent: this one is the fast demo path, Airflow
+# is the "how would this actually be scheduled in production" path.
+#
+# Usage (from the repo root):
+#   docker compose up --build
+#
+# `pipeline` runs once (generate sample data -> ingest -> dbt seed/run/test)
+# and exits 0 on success. `dashboard` waits for that success before
+# starting, then serves Streamlit on http://localhost:8501.
+
+services:
+  pipeline:
+    build: .
+    volumes:
+      # Bind mounts, not named volumes, so the generated data/warehouse
+      # files land in your actual repo folder -- inspectable with DuckDB
+      # or a text editor on the host, exactly like running it without
+      # Docker at all.
+      - ./data:/app/data
+      - ./warehouse:/app/warehouse
+    environment:
+      DBT_PROFILES_DIR: /app/finance_dbt
+    command: >
+      sh -c "
+        python scripts/generate_sample_data.py &&
+        python ingestion/load_to_duckdb.py &&
+        cd finance_dbt &&
+        dbt seed &&
+        dbt run &&
+        dbt test
+      "
+
+  dashboard:
+    build: .
+    volumes:
+      - ./data:/app/data
+      - ./warehouse:/app/warehouse
+    environment:
+      DBT_PROFILES_DIR: /app/finance_dbt
+    ports:
+      - "8501:8501"
+    depends_on:
+      pipeline:
+        # Not just "started" -- waits for the pipeline container to exit
+        # 0 (dbt test passing) before starting the dashboard, so you can
+        # never load a dashboard against a half-built or failed warehouse.
+        condition: service_completed_successfully
+    command: >
+      streamlit run dashboard/app.py
+      --server.address=0.0.0.0
+      --server.port=8501

@@ -1,0 +1,41 @@
+version: 2
+
+sources:
+  - name: raw
+    description: >
+      Data loaded as-is by ingestion/load_to_duckdb.py from bank export
+      CSVs in data/raw/. Deliberately untouched by business logic -- this
+      is the pipeline's system of record for "what the source actually
+      said," which matters if you ever need to debug a downstream number.
+    schema: raw
+    tables:
+      - name: transactions
+        description: One row per raw transaction line from a bank/card export.
+        loaded_at_field: _loaded_at
+        columns:
+          - name: transaction_date
+            description: Date the purchase/deposit occurred.
+          - name: amount
+            description: Signed dollar amount. Negative = money out, positive = money in.
+
+models:
+  - name: stg_transactions
+    description: >
+      Light cleanup of raw.transactions: standardized column names/types,
+      a derived transaction_id, and a couple of boolean flags. No
+      categorization or business rules here -- that starts in intermediate/.
+    columns:
+      - name: transaction_id
+        description: Stable surrogate key (md5 hash of source file + row content).
+        tests:
+          - unique
+          - not_null
+      - name: transaction_date
+        tests:
+          - not_null
+      - name: amount
+        tests:
+          - not_null
+      - name: description
+        tests:
+          - not_null

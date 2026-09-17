@@ -1,0 +1,7 @@
+# Installed into the Airflow image on top of Airflow's own dependencies.
+# Only what the DAG's tasks actually need to run the pipeline --
+# Streamlit/Plotly (dashboard-only) are deliberately left out to keep this
+# image smaller and its purpose obvious.
+duckdb>=0.10
+dbt-duckdb>=1.7
+pandas>=2.1
