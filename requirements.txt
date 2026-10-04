@@ -6,3 +6,6 @@ pandas>=2.1
 # Dashboard
 streamlit>=1.30
 plotly>=5.18
+
+# Encryption (local real-data workflow + dashboard's own-data upload)
+cryptography>=42

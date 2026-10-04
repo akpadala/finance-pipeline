@@ -1,0 +1,13 @@
+# Base Streamlit theme -- sets native widget colors (buttons, selectbox,
+# sliders) to match the dashboard's forest/cream palette. The `font` key
+# here only accepts a few generic families, so it can't load the actual
+# Lora/Inter Google Fonts used throughout the page -- that part is handled
+# by the <style> block injected in dashboard/app.py. This file just keeps
+# Streamlit's own native widgets from clashing with that CSS.
+[theme]
+base = "light"
+primaryColor = "#2F4A3D"
+backgroundColor = "#F7F3EA"
+secondaryBackgroundColor = "#EFE8D8"
+textColor = "#2B2B26"
+font = "sans serif"

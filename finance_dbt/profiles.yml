@@ -19,5 +19,9 @@ finance_dbt:
     dev:
       type: duckdb
       # relative to the *project* root when run via `dbt` from finance_dbt/
-      path: ../warehouse/finance.duckdb
+      # by default. The dashboard's "try with your own data" upload feature
+      # (dashboard/secure_upload.py) overrides DBT_DUCKDB_PATH per session
+      # so each upload runs dbt against its own throwaway temp database
+      # instead of this shared warehouse file -- see that module for why.
+      path: "{{ env_var('DBT_DUCKDB_PATH', '../warehouse/finance.duckdb') }}"
       threads: 4

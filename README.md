@@ -65,22 +65,86 @@ You now have a working pipeline running against realistic synthetic data.
 ## Using your own real transactions
 
 This is meant to become your actual budget tool, not stay a demo forever.
+There are three ways to get your real data in, in increasing order of how
+much they protect it at rest. All three expect the same column shape:
 
-1. Export your transaction history as a CSV from your bank or card
-   issuer's website (almost all of them offer this — look for "Download"
-   or "Export" near your transaction list).
-2. Rename its columns to match what `ingestion/load_to_duckdb.py` expects:
-   `Transaction Date, Post Date, Description, Category, Type, Amount`
-   (a `Memo` column is optional). Most banks already use very close to
-   this shape — you may just need to rename a column or two.
-3. Drop the CSV into `data/raw/` alongside (or instead of)
-   `sample_transactions.csv`.
-4. Set your real budget targets in `finance_dbt/seeds/category_budgets.csv`.
-5. Rerun `make pipeline` and `make dashboard`.
+```
+Transaction Date, Post Date, Description, Category, Type, Amount
+```
+(`Memo` is optional.) Export a CSV from your bank or card issuer's website
+(almost all of them offer this — look for "Download" or "Export" near
+your transaction list) and rename its columns to match if needed; most
+banks already use something very close to this shape.
 
-`.gitignore` is already set up to keep your real transaction CSVs out of
-git — only the synthetic sample data gets committed. **Never commit your
-real financial data to a public GitHub repo.**
+### Option A: plaintext in `data/raw/`
+
+Drop the renamed CSV into `data/raw/` alongside (or instead of)
+`sample_transactions.csv`, set your real budget targets in
+`finance_dbt/seeds/category_budgets.csv`, then rerun `make pipeline` and
+`make dashboard`. `.gitignore` already keeps everything in `data/raw/`
+except the synthetic sample file out of git — but the file still sits in
+plaintext on your disk the whole time it's there. Fine for a lot of
+people; Option B exists for anyone who'd rather it didn't.
+
+### Option B: encrypted at rest locally
+
+```
+python3 scripts/encrypt_bank_csv.py path/to/your_real_export.csv
+```
+
+This prompts for a passphrase (twice, to confirm), writes
+`data/private/your_real_export.csv.enc`, verifies the encrypted file
+actually decrypts back to the original bytes, and only then deletes the
+plaintext input. `data/private/` is wholly gitignored. To run the
+pipeline against it:
+
+```
+export BANK_DATA_PASSPHRASE="..."       # or you'll be prompted
+python3 ingestion/load_to_duckdb.py     # decrypts straight into memory,
+                                         # never writes plaintext back to disk
+```
+
+The key is derived from your passphrase via PBKDF2 (480,000 iterations,
+random per-file salt) and is never itself stored anywhere — forget the
+passphrase and the file is unrecoverable by design. See
+`ingestion/crypto_utils.py` for the actual implementation.
+
+### Option C: upload it through the dashboard
+
+The "Try with your own data" expander in the dashboard's sidebar does
+this without touching the command line at all: your CSV is encrypted the
+moment it's received (a random key that lives only in that browser
+session's server memory), processed through the *exact same* dbt models
+as the sample data in an isolated, disposable database, and the whole
+temp directory — ciphertext, database, dbt logs, all of it — is deleted
+immediately after, success or failure. See `dashboard/secure_upload.py`
+for the full flow, spelled out step by step in its docstring.
+
+**What this does and doesn't actually protect**, stated plainly rather
+than oversold:
+
+- It genuinely minimizes how long your data exists as plaintext on disk,
+  and where: a single isolated temp directory, for the few seconds
+  dbt needs, deleted deterministically rather than left to OS cleanup.
+- It is **not** end-to-end encryption. This server process has to be
+  able to read your data to process it, so it necessarily holds the key
+  at some point. "Encrypted" here means *at rest*, not *unreadable to
+  the app itself* — anyone who could get arbitrary code execution on the
+  server while your upload is being processed could read it, same as
+  any program that touches your data at all.
+- Only aggregated numbers (monthly totals, budget comparisons, which
+  merchants recur) are kept in session memory for the rest of your
+  session, never raw transaction rows.
+- If you ever deploy this somewhere shared or public, default the live
+  version to the sample data and keep this upload path clearly labeled
+  as a "try it" feature. A free-tier hosted demo has no compliance
+  backing behind it — fine for a portfolio piece showing how you'd
+  *build* this, not the place for anyone's actual account numbers.
+
+**Never commit your real financial data to a public GitHub repo** —
+`.gitignore` covers `data/raw/*.csv` (except the sample) and all of
+`data/private/`, but it's still worth checking `git status` before you
+push if you've been experimenting with a real export.
 
 ---
 
@@ -241,11 +305,17 @@ rather than something left unfinished:
 
 ```
 finance-pipeline/
-├── data/raw/                  synthetic (or your own) bank CSV exports
+├── data/raw/                  synthetic (or your own, plaintext) bank CSV exports
+├── data/private/               your own exports, encrypted (gitignored; see
+│                                "Using your own real transactions")
 ├── scripts/
-│   └── generate_sample_data.py  fabricates a year of realistic transactions
+│   ├── generate_sample_data.py  fabricates a year of realistic transactions
+│   └── encrypt_bank_csv.py      encrypts a real export into data/private/
 ├── ingestion/
-│   └── load_to_duckdb.py        CSV → DuckDB raw.transactions (idempotent)
+│   ├── load_to_duckdb.py        CSV (plaintext or decrypted) → DuckDB raw.transactions
+│   │                             (idempotent; also used programmatically by
+│   │                             dashboard/secure_upload.py)
+│   └── crypto_utils.py          PBKDF2 + Fernet encrypt/decrypt helpers
 ├── finance_dbt/                 the dbt project
 │   ├── models/staging/           1:1 cleanup of the raw source
 │   ├── models/intermediate/      categorization + business logic
@@ -253,7 +323,12 @@ finance-pipeline/
 │   ├── seeds/category_budgets.csv  your monthly budget targets
 │   └── macros/categorize_transaction.sql
 ├── dashboard/
-│   └── app.py                   Streamlit dashboard (reads marts only)
+│   ├── app.py                   Streamlit entry point: loads data, renders the page
+│   ├── dashboard_html.py        builds the single-page scroll-nav HTML (+ Plotly)
+│   ├── transform.py             marts DataFrames → the dict dashboard_html expects
+│   ├── secure_upload.py         "try your own data": encrypt → isolated dbt run → shred
+│   ├── assets/                  banner photos + the bundled Plotly JS bundle
+│   └── tests/test_transform.py  plain-assertion regression tests (no pytest needed)
 ├── airflow/                      Phase 2: real orchestration
 │   ├── docker-compose.yaml       lean LocalExecutor Airflow stack
 │   ├── Dockerfile                Airflow image + this project's deps
@@ -342,6 +417,11 @@ Personal Finance Data Pipeline                                    2026
 • Containerized the pipeline and dashboard (Docker Compose) and added a
   GitHub Actions CI workflow that runs the full dbt test suite on every
   push, catching data-quality regressions before merge
+• Built a privacy-preserving upload path (PBKDF2 + Fernet/AES encryption,
+  per-session isolated DuckDB databases, deterministic temp-file cleanup)
+  letting the dashboard process a user's own real transaction export
+  through the same tested dbt models without ever persisting it in
+  plaintext or touching the shared warehouse
 ```
 
 ---
@@ -438,3 +518,56 @@ whoever wrote it.
   management in a public repo and a free tier that can expire and leave
   a dead connection for whoever clones this next — real cost for no
   functional difference in what the project demonstrates.
+- **"Is the upload feature actually encrypted, or is that just a
+  label?"** → The honest, specific answer, not just "yes": the uploaded
+  bytes are encrypted (Fernet/AES) the instant they're received, with a
+  random key that lives only in that browser session's server memory.
+  Only the ciphertext — never plaintext — is written to disk, into an
+  isolated 0700 temp directory that's deleted right after processing.
+  What's *not* true is "end-to-end encrypted" — this process has to
+  decrypt it to run the pipeline, so it's protection for data at rest,
+  not from the app itself. Being precise about that distinction, instead
+  of letting "encrypted" imply more than it does, is the actual signal —
+  especially for a company whose core product is trust with financial
+  data (worth saying outright in a Capital One interview specifically).
+- **"Why not just use a passphrase for the dashboard upload too, like
+  the local CLI path?"** → Different threat models need different key
+  models. `scripts/encrypt_bank_csv.py` protects a file sitting on your
+  own disk indefinitely between runs — a passphrase only you know is the
+  right fit there. A dashboard upload is processed once and discarded
+  within seconds; there's no human available to type a passphrase into a
+  web request even if it made sense to. A random, ephemeral,
+  session-scoped key (`Fernet.generate_key()`, held in
+  `st.session_state`) is the right primitive for "protect this while it
+  briefly exists," the same way a TLS session key differs from a
+  long-term account password.
+- **"How is this different from Mint / YNAB / Copilot / [any real
+  budgeting app]?"** → It isn't trying to be one, and saying that plainly
+  is a stronger answer than pretending otherwise. Those are consumer
+  products optimized for day-to-day use — live bank sync via Plaid,
+  mobile notifications, years of polish. This project demonstrates the
+  data engineering that would sit *underneath* a product like that, not
+  a competitor to the product itself:
+  - Every number is traceable to a version-controlled, tested dbt model
+    you can open and read — 15+ tests enforcing data quality on every
+    run, not a black-box backend you have to trust.
+  - The transformation layer is warehouse-portable (DuckDB → Snowflake/
+    BigQuery is a `profiles.yml` change, not a rewrite) — a closed
+    consumer app can't be repointed at anything.
+  - It's orchestrated and tested like production data infra (Airflow
+    DAG, idempotent ingestion, CI running the full suite on every push),
+    not a one-off script with a UI on top.
+  - Using CSV exports instead of a live Plaid/bank-OAuth connection is a
+    *deliberate scope boundary*, not a missing feature — handling live
+    bank credentials is real compliance and security surface area that
+    doesn't belong in a portfolio project, and it isn't what this
+    project is built to demonstrate anyway.
+  - The security design is fully inspectable: you can read exactly how
+    an upload is encrypted, isolated, and discarded, line by line,
+    instead of trusting an opaque vendor backend to have done it right.
+
+  One-line version for the actual conversation: *"I'm not trying to
+  out-build Mint — I'm demonstrating the kind of tested, documented,
+  auditable pipeline a company like Capital One would actually run
+  behind a product like that. The dashboard is the visible output; the
+  point is everything underneath it."*
