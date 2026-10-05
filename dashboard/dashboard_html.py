@@ -1,6 +1,6 @@
 """
-Builds the single-page, scroll-navigated dashboard HTML that app.py embeds
-via st.components.v1.html().
+Builds the dashboard's page body (render_dashboard_html) and its top nav
+(render_topnav_html), both embedded by app.py.
 
 Why a separate module: this file is pure stdlib (base64/json/os/html only
 -- no pandas, no duckdb, no streamlit). That means the exact HTML app.py
@@ -9,17 +9,25 @@ the rest of the pipeline being set up, with scripts/preview_dashboard_html.py
 and a hand-written sample data dict. app.py's only job is to turn
 DataFrames into the plain dict shape this module expects.
 
-Layout: one sticky top nav (Overview / Spending / Budget / Recurring)
-with smooth-scroll anchor links, four full-width sections in alternating
-tints, a duotone photo banner behind the hero section and another behind
-the (dark) Recurring section, and a scroll-triggered fade/slide-in on each
-section via IntersectionObserver. This is embedded in a fixed-height,
-internally-scrolling iframe (see app.py) -- that's a deliberate trade-off:
-Streamlit's components.html() always renders inside an iframe, and
-position:sticky only works relative to a scrolling ancestor *inside* that
-iframe, not the outer page. A fixed-height scrollable panel is what makes
-the sticky nav and anchor scrolling actually work; a free-height iframe
-would make the nav sticky to nothing.
+Layout: four full-width sections (Overview / Spending / Budget / Recurring)
+in alternating tints, a duotone photo banner behind the hero section and
+another behind the (dark) Recurring section, and a scroll-triggered
+fade/slide-in on each section via IntersectionObserver. render_dashboard_html()
+renders all of that inside a components.html() iframe that auto-sizes itself
+to its own content height (see the resize script at the bottom of
+_BODY_TEMPLATE) so the OUTER Streamlit page does all the scrolling, as one
+continuous page -- not a boxed-in panel with its own internal scrollbar.
+
+The top nav is deliberately a *separate* function (render_topnav_html,
+rendered by app.py via st.markdown(..., unsafe_allow_html=True), outside
+the iframe) rather than part of the body above: position:sticky only ever
+sticks relative to a scrolling ancestor *in the same document* as the
+element. Nothing inside an iframe can stick to the outer page's scroll, so
+a sticky nav that's meant to follow you down the whole page has to live in
+Streamlit's own page, not in the iframe. Because that iframe is embedded
+via srcdoc (not sandboxed), it's same-origin with the parent page, so the
+nav's script can still reach into it to find section positions and jump to
+them on click -- see render_topnav_html()'s own script for how.
 """
 
 import base64
@@ -102,20 +110,8 @@ CSS = """
 }
 * { box-sizing:border-box; }
 html { scroll-behavior:smooth; }
-html, body { height:100%; }
-body { margin:0; background:var(--bg); font-family:'Inter',sans-serif; color:var(--text); overflow-y:auto; }
+body { margin:0; background:var(--bg); font-family:'Inter',sans-serif; color:var(--text); }
 h2 { font-family:'Inter',sans-serif; color:var(--forest-dark); font-weight:700; margin:0; }
-
-.topnav { position:sticky; top:0; z-index:50; background:rgba(247,243,234,0.92); backdrop-filter:blur(6px);
-  border-bottom:1px solid var(--border); display:flex; align-items:center; gap:28px; padding:14px 40px; }
-.topnav .mark { width:28px; height:28px; border-radius:7px; background:var(--forest); color:#fff;
-  display:flex; align-items:center; justify-content:center; flex-shrink:0; font-weight:800; font-size:13px; letter-spacing:-0.02em; }
-.topnav .wordmark { font-weight:800; font-size:1.05rem; color:var(--forest-dark); margin-right:10px; white-space:nowrap; letter-spacing:-0.01em; }
-.topnav a { font-size:0.86rem; font-weight:600; color:var(--muted); text-decoration:none; padding:6px 2px;
-  border-bottom:2px solid transparent; transition:color .15s ease, border-color .15s ease; }
-.topnav a:hover, .topnav a.active { color:var(--forest-dark); border-bottom-color:var(--forest); }
-.topnav .spacer { flex:1; }
-.topnav .asof { font-size:0.78rem; color:var(--muted); white-space:nowrap; }
 
 .section { position:relative; border-bottom:1px solid var(--border); }
 .section:last-child { border-bottom:none; }
@@ -124,19 +120,24 @@ h2 { font-family:'Inter',sans-serif; color:var(--forest-dark); font-weight:700; 
 .section.tint-c { background:var(--bg); }
 .section.tint-d { background:var(--forest-dark); color:#F2EFE4; }
 .section.tint-d .section-sub { color:#C7CFC5; }
-.inner { max-width:1100px; margin:0 auto; }
+.inner { max-width:1320px; margin:0 auto; }
 .eyebrow { font-size:0.78rem; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:var(--forest); margin-bottom:10px; }
 .tint-d .eyebrow { color:#9FC2A7; }
 .section-head { margin-bottom:28px; max-width:640px; }
 .section-head h2 { font-size:1.5rem; }
-.tint-d .section-head h2 { color:#F7F5EC; }
+/* Any h2 on a dark (tint-d) section, not just one inside .section-head --
+   the Recurring section's heading sits directly in .textblock instead (see
+   below), and without this it was defaulting to the same color as its own
+   dark-green background: --forest-dark text on a --forest-dark backdrop,
+   which is how "Detected recurring charges" ended up nearly invisible. */
+.tint-d h2 { color:#F7F5EC; }
 .section-sub { color:var(--muted); font-size:0.92rem; margin-top:6px; }
 
 .photo-banner { position:relative; min-height:380px; display:flex; align-items:center; overflow:hidden; }
 .photo-banner .bgphoto { position:absolute; inset:0; background-size:cover; background-position:72% center; }
 .photo-banner .scrim { position:absolute; inset:0; background:linear-gradient(90deg, rgba(247,243,234,0.97) 0%, rgba(247,243,234,0.90) 28%, rgba(247,243,234,0.55) 50%, rgba(247,243,234,0.18) 68%, rgba(247,243,234,0.05) 100%); }
 .photo-banner .content { position:relative; z-index:2; padding:48px 40px; width:100%; }
-.photo-banner .inner { max-width:1100px; margin:0 auto; }
+.photo-banner .inner { max-width:1320px; margin:0 auto; }
 
 .hero-label { font-size:0.8rem; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:6px; }
 .hero-value { font-weight:800; font-size:3.2rem; line-height:1.05; }
@@ -175,11 +176,11 @@ h2 { font-family:'Inter',sans-serif; color:var(--forest-dark); font-weight:700; 
 .badge.ok { background:var(--forest-tint); color:var(--under-text); }
 .badge.over { background:var(--over-tint); color:var(--over-text); }
 
-.dark-banner { position:relative; min-height:340px; display:flex; align-items:center; overflow:hidden; }
+.dark-banner { position:relative; display:flex; align-items:center; overflow:hidden; }
 .dark-banner .bgphoto { position:absolute; inset:0; background-size:cover; background-position:20% center; }
 .dark-banner .scrim { position:absolute; inset:0; background:linear-gradient(90deg, rgba(31,51,40,0.15) 0%, rgba(31,51,40,0.75) 46%, rgba(31,51,40,0.97) 64%, #1F3328 100%); }
 .dark-banner .content { position:relative; z-index:2; padding:48px 40px; width:100%; }
-.dark-banner .inner { max-width:1100px; margin:0 auto; display:flex; justify-content:flex-end; }
+.dark-banner .inner { max-width:1320px; margin:0 auto; display:flex; justify-content:flex-end; }
 .dark-banner .textblock { max-width:620px; }
 
 .sub-row { display:flex; align-items:center; gap:14px; padding:13px 0; border-bottom:1px solid rgba(255,255,255,0.12); }
@@ -206,18 +207,7 @@ _BODY_TEMPLATE = """<!doctype html>
 <style>__CSS__</style>
 <script>__PLOTLY_JS__</script>
 </head>
-<body>
-
-<div class="topnav">
-  <div class="mark">PF</div>
-  <div class="wordmark">Personal Finance</div>
-  <a href="#overview" class="navlink active">Overview</a>
-  <a href="#spending" class="navlink">Spending</a>
-  <a href="#budget" class="navlink">Budget</a>
-  <a href="#recurring" class="navlink">Recurring</a>
-  <div class="spacer"></div>
-  <div class="asof">&middot; every number traces back to a tested dbt model</div>
-</div>
+<body data-fp-dashboard="1">
 
 <section id="overview" class="section photo-banner">
   <div class="bgphoto" style="background-image:url('data:image/jpeg;base64,__HERO_B64__')"></div>
@@ -303,23 +293,183 @@ _BODY_TEMPLATE = """<!doctype html>
   }, { threshold: 0.15 });
   revealEls.forEach(function(el) { io.observe(el); });
 
-  var navLinks = document.querySelectorAll('.navlink');
-  var sections = document.querySelectorAll('section[id]');
-  var navObserver = new IntersectionObserver(function(entries) {
-    entries.forEach(function(entry) {
-      if (entry.isIntersecting) {
-        navLinks.forEach(function(l) { l.classList.remove('active'); });
-        var active = document.querySelector('.navlink[href="#' + entry.target.id + '"]');
-        if (active) active.classList.add('active');
-      }
-    });
-  }, { rootMargin: '-45% 0px -45% 0px' });
-  sections.forEach(function(s) { navObserver.observe(s); });
+  // Resize this iframe to match its own real content height, so the OUTER
+  // Streamlit page handles all the scrolling as one continuous page instead
+  // of this iframe showing a boxed-in panel with its own internal scrollbar.
+  // Safe to reach window.frameElement here because st.components.v1.html()
+  // embeds this document via an un-sandboxed srcdoc iframe, which is
+  // same-origin with the parent page.
+  (function () {
+    function resize() {
+      try {
+        var h = document.documentElement.scrollHeight;
+        if (window.frameElement && h > 0) {
+          window.frameElement.style.height = h + 'px';
+        }
+      } catch (e) { /* not embedded the way we expect -- leave Streamlit's static height */ }
+    }
+    resize();
+    window.addEventListener('load', resize);
+    window.addEventListener('resize', resize);
+    if (window.ResizeObserver) {
+      new ResizeObserver(resize).observe(document.body);
+    } else {
+      // No ResizeObserver (very old browser): a couple of delayed re-checks
+      // still catch the Inter webfont swap reflowing text after first paint.
+      setTimeout(resize, 400);
+      setTimeout(resize, 1200);
+    }
+  })();
 </script>
 
 </body>
 </html>
 """
+
+_TOPNAV_TEMPLATE = """
+<style>
+.fp-topnav { position:sticky; top:0; z-index:999; background:rgba(247,243,234,0.95);
+  backdrop-filter:blur(6px); border:1px solid #E3DDC9; border-radius:12px;
+  display:flex; align-items:center; gap:28px; padding:12px 20px; font-family:'Inter',sans-serif; }
+.fp-topnav .fp-mark { width:26px; height:26px; border-radius:7px; background:#2F4A3D; color:#fff;
+  display:flex; align-items:center; justify-content:center; flex-shrink:0; font-weight:800;
+  font-size:12px; letter-spacing:-0.02em; }
+.fp-topnav .fp-wordmark { font-weight:800; font-size:1.0rem; color:#1F3328; margin-right:6px;
+  white-space:nowrap; letter-spacing:-0.01em; }
+.fp-topnav a.fp-navlink { font-size:0.86rem; font-weight:600; color:#6B6358; text-decoration:none;
+  padding:6px 2px; border-bottom:2px solid transparent; transition:color .15s ease, border-color .15s ease; }
+.fp-topnav a.fp-navlink:hover, .fp-topnav a.fp-navlink.active { color:#1F3328; border-bottom-color:#2F4A3D; }
+.fp-topnav .fp-spacer { flex:1; }
+.fp-topnav .fp-asof { font-size:0.78rem; color:#6B6358; white-space:nowrap; }
+@media (max-width: 900px) { .fp-topnav .fp-asof { display:none; } }
+</style>
+<div class="fp-topnav" id="fp-topnav">
+  <div class="fp-mark">B</div>
+  <div class="fp-wordmark">Budgeting</div>
+  <a href="#overview" class="fp-navlink active" data-fp-anchor="overview">Overview</a>
+  <a href="#spending" class="fp-navlink" data-fp-anchor="spending">Spending</a>
+  <a href="#budget" class="fp-navlink" data-fp-anchor="budget">Budget</a>
+  <a href="#recurring" class="fp-navlink" data-fp-anchor="recurring">Recurring</a>
+  <div class="fp-spacer"></div>
+  <div class="fp-asof">&middot; every number traces back to a tested dbt model</div>
+</div>
+"""
+
+# A <script> tag embedded in st.markdown(..., unsafe_allow_html=True) does
+# NOT reliably execute -- Streamlit's markdown renderer inserts that HTML
+# via innerHTML, and per the DOM spec, script elements inserted that way
+# just sit there inert (worse, in this app it also got mangled into
+# visible literal text on the page, which is how this bug actually showed
+# up). st.components.v1.html() is the channel Streamlit actually supports
+# for running arbitrary JS, so the nav's behavior (click-to-scroll,
+# highlighting the active link) lives here instead, in its own effectively
+# invisible (height=0) iframe -- see app.py. That means this script's
+# `document` is its OWN iframe's document, not the real page, so
+# everything here goes through window.parent to reach the real nav (in the
+# outer page) and the dashboard content (in its own separate iframe,
+# found the same way render_dashboard_html()'s own resize script finds
+# itself: by the data-fp-dashboard marker on its <body>).
+_TOPNAV_SCRIPT = """<!doctype html><html><body><script>
+(function () {
+  var doc = window.parent.document;
+
+  function dashboardIframe() {
+    var frames = doc.querySelectorAll('iframe');
+    for (var i = 0; i < frames.length; i++) {
+      try {
+        var d = frames[i].contentDocument;
+        if (d && d.body && d.body.getAttribute('data-fp-dashboard')) return frames[i];
+      } catch (e) { /* cross-origin iframe elsewhere on the page -- not ours */ }
+    }
+    return null;
+  }
+
+  function navHeight() {
+    var nav = doc.getElementById('fp-topnav');
+    return nav ? nav.offsetHeight : 0;
+  }
+
+  function scrollToAnchor(id) {
+    var ifr = dashboardIframe();
+    if (!ifr) return;
+    var target = ifr.contentDocument.getElementById(id);
+    if (!target) return;
+    var ifrRect = ifr.getBoundingClientRect();
+    var targetRect = target.getBoundingClientRect();
+    var destY = window.parent.scrollY + ifrRect.top + targetRect.top - navHeight() - 10;
+    window.parent.scrollTo({ top: Math.max(destY, 0), behavior: 'smooth' });
+  }
+
+  doc.querySelectorAll('.fp-topnav .fp-navlink').forEach(function (a) {
+    a.addEventListener('click', function (e) {
+      e.preventDefault();
+      scrollToAnchor(a.getAttribute('data-fp-anchor'));
+    });
+  });
+
+  var SECTION_IDS = ['overview', 'spending', 'budget', 'recurring'];
+
+  function updateActiveLink() {
+    var ifr = dashboardIframe();
+    if (!ifr) return;
+    var navH = navHeight();
+    // el.getBoundingClientRect() here is relative to the IFRAME's own
+    // viewport, which never scrolls (the iframe has no internal overflow
+    // -- see the resize script in render_dashboard_html). It's a constant
+    // per section, not a reflection of how far the outer page has
+    // scrolled. ifrRect.top (the iframe's own position in the outer page)
+    // is what actually moves as you scroll -- same combination
+    // scrollToAnchor() above uses, just in reverse.
+    var ifrRect = ifr.getBoundingClientRect();
+    var current = SECTION_IDS[0];
+    for (var i = 0; i < SECTION_IDS.length; i++) {
+      var el = ifr.contentDocument.getElementById(SECTION_IDS[i]);
+      if (!el) continue;
+      var top = ifrRect.top + el.getBoundingClientRect().top;
+      if (top - navH <= 90) current = SECTION_IDS[i];
+    }
+    doc.querySelectorAll('.fp-topnav .fp-navlink').forEach(function (a) {
+      a.classList.toggle('active', a.getAttribute('data-fp-anchor') === current);
+    });
+  }
+
+  var ticking = false;
+  window.parent.addEventListener('scroll', function () {
+    if (ticking) return;
+    ticking = true;
+    window.parent.requestAnimationFrame(function () { updateActiveLink(); ticking = false; });
+  }, { passive: true });
+  window.parent.addEventListener('load', updateActiveLink);
+  setTimeout(updateActiveLink, 800);
+  setTimeout(updateActiveLink, 2000); // catch the dashboard iframe's own resize settling late
+})();
+</script></body></html>
+"""
+
+
+def render_topnav_html() -> str:
+    """The dashboard's top nav markup + styling, standalone -- meant to be
+    rendered by app.py via st.markdown(render_topnav_html(),
+    unsafe_allow_html=True), placed directly above the
+    st.components.v1.html(render_dashboard_html(...)) call. Kept separate
+    from render_dashboard_html() on purpose: see the module docstring for
+    why a sticky nav that follows you down the page can't live inside that
+    function's iframe. Pairs with render_topnav_script_html() for the
+    nav's actual click/highlight behavior -- see that function's docstring
+    for why the script isn't just included here."""
+    return _TOPNAV_TEMPLATE
+
+
+def render_topnav_script_html() -> str:
+    """The nav's behavior (click a link -> smooth-scroll to that section;
+    highlight the active link as you scroll), as its own tiny HTML
+    document. Meant to be rendered by app.py via
+    st.components.v1.html(render_topnav_script_html(), height=0) --
+    st.components.v1.html() is Streamlit's actual supported channel for
+    running JS (st.markdown's unsafe_allow_html does not reliably execute
+    <script> tags at all, and can mangle them into visible text instead of
+    silently doing nothing)."""
+    return _TOPNAV_SCRIPT
 
 
 def _category_rows_html(categories: list) -> str:
@@ -411,11 +561,20 @@ def render_dashboard_html(data: dict) -> str:
             "paper_bgcolor": "#FFFFFF",
             "plot_bgcolor": "#FFFFFF",
             "font": {"family": "Inter, sans-serif", "color": "#2B2B26", "size": 12},
-            "margin": {"l": 10, "r": 10, "t": 10, "b": 10},
+            # l/b give the $ y-axis and month x-axis labels room to actually
+            # show up -- 10px all around (the previous values) was tight
+            # enough that Plotly's own tick labels got clipped at the plot's
+            # edges. automargin:true is a second safety net on top of that:
+            # it lets Plotly grow the margin further on its own if a
+            # particular label (e.g. "$12,000") needs more room than this.
+            "margin": {"l": 48, "r": 16, "t": 16, "b": 40},
             "height": 260,
             "showlegend": False,
-            "xaxis": {"gridcolor": "#E3DDC9", "zerolinecolor": "#E3DDC9"},
-            "yaxis": {"gridcolor": "#E3DDC9", "zerolinecolor": "#E3DDC9", "rangemode": "tozero"},
+            "xaxis": {"gridcolor": "#E3DDC9", "zerolinecolor": "#E3DDC9", "automargin": True},
+            "yaxis": {
+                "gridcolor": "#E3DDC9", "zerolinecolor": "#E3DDC9", "rangemode": "tozero",
+                "automargin": True, "tickprefix": "$",
+            },
         },
     }
 

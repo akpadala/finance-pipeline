@@ -52,7 +52,12 @@ def _inject_outer_css() -> None:
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         html, body, [class*="css"] { font-family: 'Inter', sans-serif; color: #2B2B26; }
         .stApp { background-color: #F7F3EA; }
-        .block-container { padding-top: 1.2rem !important; padding-bottom: 0 !important; max-width: 1220px; }
+        /* padding-top used to be 1.2rem, which wasn't enough clearance below
+        Streamlit's own fixed header bar -- the top of our sticky nav (and
+        the hero section behind it) was getting rendered partly underneath
+        it. This is a guess at a safe value, not measured against every
+        Streamlit version; nudge it further if there's still a sliver cut off. */
+        .block-container { padding-top: 3rem !important; padding-bottom: 0 !important; max-width: 1440px; }
         [data-testid="stSidebar"] { background-color: #FFFFFF; border-right: 1px solid #E3DDC9; }
         [data-testid="stCaptionContainer"], .stCaption { color: #6B6358 !important; }
         #MainMenu, footer { visibility: hidden; }
@@ -159,10 +164,22 @@ else:
     st.sidebar.caption("Data source: data/raw/*.csv -> DuckDB (raw) -> dbt (staging -> intermediate -> marts) -> this dashboard.")
 
 data = transform.build_view_data(monthly_df, budget_df, recurring_df, selected_month)
+
+# The nav is rendered separately from the dashboard body, and directly into
+# Streamlit's own page (not into the iframe below) -- see dashboard_html.py's
+# module docstring for why that's what makes it genuinely sticky. Its
+# behavior (click-to-scroll, highlighting the active link) comes from a
+# second, invisible (height=0) component -- st.markdown can't reliably run
+# <script> tags, only st.components.v1.html() actually can; see
+# render_topnav_script_html()'s docstring.
+st.markdown(dashboard_html.render_topnav_html(), unsafe_allow_html=True)
+st.components.v1.html(dashboard_html.render_topnav_script_html(), height=0)
+
 html = dashboard_html.render_dashboard_html(data)
 
-# Fixed height + internal scrolling rather than letting the outer Streamlit
-# page scroll -- see dashboard_html.py's docstring for why components.html()
-# makes that the only reliable way to get a sticky nav and smooth-scroll
-# anchors to actually work.
-st.components.v1.html(html, height=950, scrolling=True)
+# height is just a starting guess -- the HTML's own resize script (see the
+# bottom of dashboard_html._BODY_TEMPLATE) immediately corrects this to the
+# real content height via window.frameElement, and scrolling=False means
+# there's never a separate scrollbar inside this box: the outer Streamlit
+# page scrolls through the whole dashboard as one continuous page.
+st.components.v1.html(html, height=1900, scrolling=False)
