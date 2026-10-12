@@ -56,14 +56,14 @@ don't change.
 DuckDB is a real OLAP (columnar, analytics-oriented) SQL database — the
 same category of engine as Snowflake, BigQuery, or Redshift — but it runs
 embedded, as a single file on disk, with no server, no account, and no
-cost. For a personal project that a recruiter or interviewer will clone
-and run in five minutes, that tradeoff is the right one: the SQL you
+cost. For a project anyone should be able to clone and run in five
+minutes, that tradeoff is the right one: the SQL you
 write against DuckDB is the same SQL (and the same dbt models) you'd
 write against Snowflake, so nothing here is a "toy" version of the real
-skill. Phase 3 below covers pointing this same dbt project at a real
-cloud warehouse instead, which is a config change, not a rewrite.
+skill. Pointing this same dbt project at a real cloud warehouse is a
+config change in `profiles.yml`, not a rewrite.
 
-## Design decisions worth being able to defend in an interview
+## Design decisions
 
 - **Idempotent ingestion.** Rerunning `load_to_duckdb.py` on the same
   file never duplicates rows (delete-then-insert per source file). Real
@@ -73,9 +73,7 @@ cloud warehouse instead, which is a config change, not a rewrite.
   keyword-matching macro is simple, transparent, and gets this dataset
   right ~100% of the time (validated — see the repo's data). It has a
   real, known failure mode (unseen merchants, mixed-use merchants like
-  CVS) which is exactly the kind of limitation worth naming unprompted in
-  an interview, along with the concrete next step (a trained text
-  classifier — see Phase 2).
+  CVS), which the trained text classifier in `ml/` is there to cover.
 - **Config-as-data for budgets.** Your budget targets live in a dbt
   *seed* (`seeds/category_budgets.csv`), not hardcoded in SQL. Changing
   your budget is editing a CSV, not a code change.
@@ -83,26 +81,6 @@ cloud warehouse instead, which is a config change, not a rewrite.
   `accepted_values`/`relationships` tests. `dbt test` is part of the
   pipeline (`make pipeline`), not an afterthought — a broken model fails
   the run instead of silently shipping bad numbers to the dashboard.
-
-## Roadmap (see README.md for the full writeup)
-
-- **Phase 1 (done, this repo):** ingestion → DuckDB → dbt → Streamlit,
-  run by hand or via `make pipeline`.
-- **Phase 2 (done, this repo):** the same chain as a real Airflow DAG
-  (`airflow/`) with failure alerting, plus an ML-based categorization
-  model (`ml/train_categorizer.py`) to catch what the rules miss.
-- **Phase 3 (done, this repo):** containerized the *pipeline and
-  dashboard* themselves with `docker-compose.yml` + `Dockerfile`
-  (Airflow already ran in Docker as of Phase 2 — this extends that to the
-  rest of the stack) and added CI (`.github/workflows/ci.yml` runs the
-  full pipeline and `dbt test` on every push/PR). Pointing the warehouse
-  at a real cloud target (Snowflake/BigQuery free tier) was scoped in
-  originally but deliberately not built — see the "Cloud warehouse"
-  section of the README for the reasoning: the dbt layer is already
-  warehouse-agnostic, so a live trial connection would add credential
-  management and expiry risk without proving anything the architecture
-  doesn't already demonstrate.
-
 
 ## After the marts: Spark parity check and model scoring
 

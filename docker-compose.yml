@@ -1,5 +1,5 @@
 # Containerizes the pipeline + dashboard themselves. Airflow already runs
-# in Docker as of Phase 2 (see airflow/docker-compose.yaml) -- this is the
+# in Docker separately (see airflow/docker-compose.yaml) -- this is the
 # separate, simpler stack for "just run the whole thing with one command"
 # (no Airflow UI, no scheduler, nothing to click through). The two stacks
 # are intentionally independent: this one is the fast demo path, Airflow

@@ -33,7 +33,7 @@ To load the encrypted file into the pipeline:
 
 Rename your bank's export columns to match REQUIRED_COLUMNS in
 ingestion/load_to_duckdb.py *before* encrypting it -- see the README
-section "Using your own real transactions."
+section "Using your own transactions."
 """
 
 from __future__ import annotations

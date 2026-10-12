@@ -4,10 +4,8 @@
 # Prefect) -- it defines the same thing a DAG would: an ordered chain of
 # tasks, each depending on the last. `make pipeline` runs the whole chain
 # in order, exactly the way an Airflow DAG with four tasks and
-# `>>` dependencies between them would. Phase 2 in the README turns this
-# exact chain into a real Airflow DAG once the sequential version here is
-# solid -- that progression (script -> Makefile -> real orchestrator) is
-# itself a normal, explainable evolution of a data pipeline.
+# `>>` dependencies between them would. airflow/dags/finance_pipeline_dag.py
+# runs the same chain as a real Airflow DAG.
 
 export DBT_PROFILES_DIR := $(CURDIR)/finance_dbt
 
@@ -54,7 +52,7 @@ pipeline: generate-data ingest dbt-seed dbt-run dbt-test
 clean:
 	rm -rf warehouse/finance.duckdb warehouse/spark_input finance_dbt/target finance_dbt/logs
 
-# Phase 3: the same pipeline + dashboard, containerized -- no local
+# The same pipeline + dashboard, containerized -- no local
 # Python/dbt setup needed at all. See docker-compose.yml.
 docker-up:
 	docker compose up --build

@@ -5,8 +5,7 @@
 # file this stack mounts in from the repo). That's the right amount of
 # infrastructure for one person's pipeline on one laptop; a distributed
 # executor (Celery/Kubernetes) is what you reach for once one machine
-# isn't enough, which is worth being able to say out loud in an
-# interview as the reason this *isn't* built that way.
+# isn't enough.
 #
 # Run from the airflow/ directory:
 #   docker compose up airflow-init   (first time only -- sets up the DB + admin user)

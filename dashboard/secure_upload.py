@@ -26,7 +26,7 @@ What actually happens to an uploaded file, in order:
   6. The entire temp directory is deleted, whether or not the run
      succeeded.
 
-Honest limits (see README "Using your own data" for the full writeup):
+Limits (see README "Using your own transactions"):
 this is encryption *at rest* for the brief window the data is on disk --
 it is not end-to-end encryption, because this server process necessarily
 has the key and can read the data to process it. And if this app is ever
@@ -152,7 +152,7 @@ def process_uploaded_csv(file_bytes: bytes, filename: str) -> tuple[pd.DataFrame
                 f"That CSV doesn't match the expected format: {e}\n\n"
                 f"Expected columns: {', '.join(load_to_duckdb.REQUIRED_COLUMNS)} "
                 "(plus an optional Memo column). See the README's "
-                '"Using your own data" section for how to reshape a real bank export.'
+                '"Using your own transactions" section for how to reshape a real bank export.'
             ) from e
         except InvalidToken as e:
             raise UploadProcessingError("Could not decrypt the upload (internal error).") from e

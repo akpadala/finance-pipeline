@@ -7,9 +7,8 @@
 #
 #   export DBT_PROFILES_DIR=$(pwd)/finance_dbt      # from the repo root
 #
-# (The README's setup steps do this for you.) If this were pointed at a
-# real cloud warehouse (Snowflake/BigQuery/Redshift -- see Phase 3 in the
-# README) this file would instead live outside the repo and pull
+# (`make pipeline` does this for you.) If this were pointed at a
+# real cloud warehouse (Snowflake/BigQuery/Redshift) this file would instead live outside the repo and pull
 # credentials from environment variables, since it would then contain
 # secrets.
 

@@ -46,8 +46,7 @@ flagged as (
         -- subscriptions (Netflix, rent, Spotify) without hardcoding a
         -- merchant allowlist. It's intentionally simple -- see the note
         -- in categorize_transaction.sql about where rule-based logic like
-        -- this tends to hit its ceiling, and how the README's Phase 2
-        -- proposes tightening it.
+        -- this tends to hit its ceiling.
         count(distinct date_trunc('month', transaction_date))
             over (partition by merchant_name, amount) >= 3 as is_likely_recurring
 

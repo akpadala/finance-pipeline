@@ -3,7 +3,7 @@
   same rules are used everywhere they're needed instead of copy-pasted
   across models.
 
-  Design note (worth explaining in an interview): the bank's own
+  Design note: the bank's own
   `category` column (see stg_transactions.bank_category) is inconsistent
   -- sometimes blank, sometimes too generic to be useful for budgeting.
   So instead of trusting the source, we derive our own category purely
@@ -14,11 +14,9 @@
   Known limitation, and a real one: keyword matching breaks down on
   merchants it's never seen (a new coffee shop, a mom-and-pop store) and
   on genuinely mixed-use merchants (CVS sells both prescriptions and
-  snacks). A natural next step -- and a good "what would you improve"
-  answer -- is training a small text classifier (e.g. TF-IDF + logistic
-  regression over merchant descriptions) on manually-labeled history to
-  catch what these rules miss. That's called out as a stretch goal in the
-  README rather than built here, to keep this project's core honest about
+  snacks). ml/train_categorizer.py addresses this with a small text
+  classifier (TF-IDF + logistic regression over merchant descriptions)
+  trained on these rules' output, kept separate so it's always clear
   what's rules vs. what's ML.
 #}
 

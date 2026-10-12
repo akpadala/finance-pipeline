@@ -12,9 +12,9 @@ aggregations) with zero setup -- no server to run, just a file on disk.
 It speaks the same SQL dialect family as Snowflake/BigQuery/Postgres, so
 everything you learn here (and every dbt model you write against it)
 transfers directly if this pipeline later points at a "real" cloud
-warehouse instead. That's exactly what Phase 3 in the README does.
+warehouse instead (a dbt profile change).
 
-Design choices worth being able to explain in an interview:
+Design choices:
   - Idempotent loads: re-running this script for the same source file does
     NOT duplicate rows. We delete-then-insert per source_file, so you can
     safely re-run the pipeline (e.g. after fixing a bug) without corrupting
@@ -28,7 +28,7 @@ Design choices worth being able to explain in an interview:
     everything downstream from scratch.
   - Any CSV dropped into data/raw/ gets picked up automatically, so this
     is also how you load your own real bank exports -- *or* see
-    "Using your own real transactions, encrypted" in the README for the
+    "Using your own transactions" in the README for the
     encrypted path (data/private/*.csv.enc, via scripts/encrypt_bank_csv.py)
     if you'd rather your real data never sit on disk as plaintext at all.
   - This module is also imported programmatically (not just run as a
@@ -59,7 +59,7 @@ PRIVATE_DATA_GLOB = os.path.join(os.path.dirname(__file__), "..", "data", "priva
 # The columns we expect any bank export dropped into data/raw/ (or
 # encrypted into data/private/) to have. Real exports vary bank to bank --
 # if you add your own, rename its columns to match this shape first. See
-# README "Using your own real transactions."
+# README "Using your own transactions."
 REQUIRED_COLUMNS = ["Transaction Date", "Post Date", "Description", "Category", "Type", "Amount"]
 
 

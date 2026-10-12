@@ -30,10 +30,9 @@ import random
 from dataclasses import dataclass
 from datetime import date, timedelta
 
-# Fixed seed => everyone who runs this gets the identical dataset. That
-# matters for a portfolio project: your dbt tests and dashboard numbers
-# should be reproducible for anyone (recruiter, interviewer) who clones
-# the repo and runs it.
+# Fixed seed => everyone who runs this gets the identical dataset, so dbt
+# test results and dashboard numbers are reproducible for anyone who
+# clones the repo and runs it.
 RANDOM_SEED = 42
 random.seed(RANDOM_SEED)
 

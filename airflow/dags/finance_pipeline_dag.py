@@ -7,8 +7,8 @@ steps are the exact same steps, in the exact same order, that
 the difference is what's running them: instead of you typing `make
 pipeline` in a terminal, Airflow's scheduler runs this on a schedule,
 retries failed tasks automatically, keeps a queryable history of every
-run, and gives you a UI to see what happened and why. That's the concrete
-answer to "why not just a script?" -- a script has none of that for free.
+run, and gives you a UI to see what happened and why -- none of which a
+plain script provides.
 
 Task dependency graph (this is what "orchestration" means in practice):
 
@@ -50,7 +50,7 @@ def alert_on_failure(context):
     This is intentionally left as a *logged* alert rather than wired to a
     real Slack webhook or SMTP server, because that would require secrets
     (a webhook URL, an app password) that don't belong committed to a
-    public portfolio repo. What's here is the real pattern used in
+    public repo. What's here is the real pattern used in
     production: Airflow calls this function automatically, with full
     context about which task failed, whenever any task in the DAG fails
     -- including dbt_test, which is exactly the "a data quality check

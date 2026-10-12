@@ -26,9 +26,7 @@ than word-level TF-IDF, because it's matching on substrings ("joe", "trad")
 rather than requiring an exact token match. Logistic regression on top
 because it's fast, interpretable (you can inspect which n-grams drive
 which category), and a completely standard, defensible baseline for text
-classification -- exactly the kind of model you want to be able to explain
-end-to-end in an interview, rather than reaching for something flashier
-you can't.
+classification.
 
 A real limitation, surfaced honestly rather than hidden: this dataset has
 only ~30 distinct merchant strings total, each repeated across many

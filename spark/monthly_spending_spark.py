@@ -36,7 +36,7 @@ Why do this at all, when dbt already builds this table?
     cluster by changing only the master URL below (local[*] -> a YARN,
     Kubernetes, or Databricks cluster).
 
-Honest scope note (say this in an interview rather than overselling it):
+Scope note:
 the sample data is about a year of one person's transactions, so Spark is
 not *faster* than DuckDB here -- Spark's startup alone takes longer than
 the whole DuckDB query. The point is the pattern: Parquet hand-off,
