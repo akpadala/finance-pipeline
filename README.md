@@ -299,6 +299,58 @@ rather than something left unfinished:
   section has the full reasoning, and the change is genuinely small: a
   new dbt profile, not a new project.
 
+## Phase 4: Spark parity check + deployed ML model
+
+Two more steps run after `dbt_test`, in the Airflow DAG, in CI, and from
+the `Makefile`.
+
+### PySpark parity job (`spark/monthly_spending_spark.py`)
+
+DuckDB exports the categorized transactions and the category dimension to
+Parquet (`warehouse/spark_input/`). A local Spark session reads them,
+joins them, and recomputes the monthly spending mart (month x category:
+transaction count, total spent, total income) with the Spark DataFrame
+API. It then compares every row against dbt's `mart_monthly_spending`:
+counts must match exactly and money totals to the cent. Any difference
+fails the job, which fails the Airflow task and fires `alert_on_failure`.
+Spark's output is saved as `spark.monthly_spending` for inspection.
+
+Two independent implementations of the same logic agreeing is a
+data-consistency check, and it's also the migration path if the data ever
+outgrows one machine: the same code runs on a cluster by changing only
+`.master("local[*]")`. At this data size Spark isn't faster than DuckDB
+(its startup takes longer than the whole query), and the file docstring
+says so.
+
+Needs Java 17+ (`java -version` to check) plus:
+
+```powershell
+pip install -r spark\requirements.txt
+python spark\monthly_spending_spark.py
+```
+
+### Batch scoring with the trained model (`ml/score_transactions.py`)
+
+Loads `ml/model/categorizer.joblib` (training one first if it doesn't
+exist yet), scores every transaction, and writes
+`ml.transaction_predictions`: the rule category, the model's predicted
+category, its confidence, whether they agree, and a `needs_review` flag
+below the 50% confidence threshold. It prints a monitoring summary each
+run, including agreement with the rules, which is the number to watch for
+a stale model or data drift.
+
+```powershell
+pip install -r ml\requirements.txt
+python ml\score_transactions.py
+```
+
+Query the results in DuckDB:
+
+```sql
+select * from ml.transaction_predictions where needs_review;
+select * from spark.monthly_spending order by month, category;
+```
+
 ---
 
 ## Project structure
@@ -332,10 +384,13 @@ finance-pipeline/
 ├── airflow/                      Phase 2: real orchestration
 │   ├── docker-compose.yaml       lean LocalExecutor Airflow stack
 │   ├── Dockerfile                Airflow image + this project's deps
-│   └── dags/finance_pipeline_dag.py  same 4 steps as `make pipeline`, as a DAG
+│   └── dags/finance_pipeline_dag.py  `make pipeline`'s 4 steps + Spark parity + scoring
 ├── ml/                           Phase 2: ML categorization add-on
-│   └── train_categorizer.py      TF-IDF + logistic regression classifier
-├── .github/workflows/ci.yml      Phase 3: runs the pipeline + dbt test on every push
+│   ├── train_categorizer.py      TF-IDF + logistic regression classifier
+│   └── score_transactions.py     Phase 4: batch scoring task in the DAG
+├── spark/                        Phase 4: PySpark job
+│   └── monthly_spending_spark.py  recomputes the monthly mart, checks parity with dbt
+├── .github/workflows/ci.yml      Phase 3: runs the pipeline, dbt tests, Spark parity + scoring on every push
 ├── Dockerfile                    Phase 3: image shared by both compose services
 ├── docker-compose.yml            Phase 3: one-command pipeline + dashboard
 ├── warehouse/                    generated DuckDB file (gitignored)
@@ -467,6 +522,20 @@ whoever wrote it.
   warehouse instead of a local file, CI enforcing tests before merge, and
   probably incremental dbt models instead of full-refresh tables once
   transaction volume gets large — covered in the Phase 3 roadmap above.
+- **"Why Spark if DuckDB is faster here?"** → At this size it isn't
+  needed, and I say so. The job exists for two reasons: it's an
+  independent re-implementation of the monthly mart, so a parity failure
+  catches a bug in either one, and it's the scale-out path, since the same
+  DataFrame code runs on a cluster by changing the master URL. Things to
+  be ready to explain: Parquet as the hand-off format, lazy evaluation
+  (nothing runs until `.toPandas()`), why `spark.sql.shuffle.partitions`
+  is lowered from 200, and why collecting to the driver is fine for a few
+  hundred rows but not for big data.
+- **"How is the model deployed?"** → As a batch-inference task in the
+  Airflow DAG: every run loads the saved model artifact, scores every
+  transaction, and writes predictions with confidence and a
+  `needs_review` flag to the warehouse. Agreement with the rules is
+  printed each run as a simple monitoring metric for staleness or drift.
 - **"Why Airflow instead of just cron?"** → cron can trigger a script on
   a schedule, but it can't express "this task depends on that one," retry
   a single failed step without rerunning everything before it, show you

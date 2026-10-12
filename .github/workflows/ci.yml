@@ -1,5 +1,6 @@
 # Runs the full pipeline -- generate synthetic data, load it, build every
-# dbt model, run every dbt test -- on every push and pull request. This is
+# dbt model, run every dbt test, check the Spark job agrees with dbt, and
+# score transactions with the ML model -- on every push and pull request. This is
 # the actual point of having tests at all: a broken model fails a GitHub
 # Actions run with a red X, not just `dbt test` on someone's laptop that
 # nobody looks at. Uses the committed synthetic sample data generator, so
@@ -51,3 +52,20 @@ jobs:
       - name: dbt test (30+ data quality tests)
         working-directory: finance_dbt
         run: dbt test
+
+      # PySpark runs on the JVM. Pin Java 17 explicitly rather than relying
+      # on whatever the runner image happens to ship.
+      - name: Set up Java (for PySpark)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Spark + ML dependencies
+        run: pip install -r spark/requirements.txt -r ml/requirements.txt
+
+      - name: Spark parity check (PySpark vs dbt monthly mart)
+        run: python spark/monthly_spending_spark.py
+
+      - name: Score transactions with the ML categorizer
+        run: python ml/score_transactions.py

@@ -1,0 +1,4 @@
+# Only needed for the Spark parity job (spark/monthly_spending_spark.py) --
+# kept separate from the root requirements.txt so the core pipeline stays
+# lean. PySpark also needs Java 17+ installed (java -version to check).
+pyspark>=3.5

@@ -11,7 +11,7 @@
 
 export DBT_PROFILES_DIR := $(CURDIR)/finance_dbt
 
-.PHONY: setup generate-data ingest dbt-seed dbt-run dbt-test dashboard pipeline clean docker-up docker-down
+.PHONY: setup generate-data ingest dbt-seed dbt-run dbt-test spark-parity train-model score dashboard pipeline clean docker-up docker-down
 
 setup:
 	python3 -m venv .venv
@@ -32,6 +32,17 @@ dbt-run:
 dbt-test:
 	cd finance_dbt && dbt test
 
+# Optional extensions (need: pip install -r spark/requirements.txt -r ml/requirements.txt,
+# plus Java 17+ for Spark). The Airflow DAG runs both after dbt_test.
+spark-parity:
+	python3 spark/monthly_spending_spark.py
+
+train-model:
+	python3 ml/train_categorizer.py
+
+score:
+	python3 ml/score_transactions.py
+
 dashboard:
 	streamlit run dashboard/app.py
 
@@ -41,7 +52,7 @@ pipeline: generate-data ingest dbt-seed dbt-run dbt-test
 	@echo "Pipeline complete. Run 'make dashboard' to view it."
 
 clean:
-	rm -rf warehouse/finance.duckdb finance_dbt/target finance_dbt/logs
+	rm -rf warehouse/finance.duckdb warehouse/spark_input finance_dbt/target finance_dbt/logs
 
 # Phase 3: the same pipeline + dashboard, containerized -- no local
 # Python/dbt setup needed at all. See docker-compose.yml.

@@ -102,3 +102,22 @@ cloud warehouse instead, which is a config change, not a rewrite.
   warehouse-agnostic, so a live trial connection would add credential
   management and expiry risk without proving anything the architecture
   doesn't already demonstrate.
+
+
+## After the marts: Spark parity check and model scoring
+
+Two more steps run after `dbt test` (Airflow DAG, CI, and `make
+spark-parity` / `make score`):
+
+```
+ DuckDB marts + intermediate  →  Parquet (warehouse/spark_input/)  →  PySpark (local[*])
+                                                                     recompute monthly mart
+                                                                     compare with dbt → fail on any difference
+                                                                     → spark.monthly_spending
+
+ intermediate transactions    →  saved scikit-learn model  →  ml.transaction_predictions
+                                 (ml/model/categorizer.joblib)  (prediction, confidence, needs_review)
+```
+
+They run one after another, not in parallel, because both write to the
+same DuckDB file and DuckDB allows one writer at a time.

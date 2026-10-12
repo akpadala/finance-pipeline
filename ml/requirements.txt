@@ -2,3 +2,4 @@
 # separate from the root requirements.txt so the core pipeline stays
 # lean and this stays an obvious, optional add-on.
 scikit-learn>=1.3
+joblib>=1.3
