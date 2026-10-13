@@ -184,5 +184,3 @@ finance-pipeline/
 ├── Dockerfile, docker-compose.yml
 └── Makefile
 ```
-
-Built with AI-assisted development (Claude).
